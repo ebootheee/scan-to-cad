@@ -1,0 +1,6 @@
+# build outputs; rebuild with build_clip.py
+*.FCStd
+*.FCBak
+*.step
+*.stl
+__pycache__/
