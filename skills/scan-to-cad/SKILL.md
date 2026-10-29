@@ -25,6 +25,50 @@ be able to rerun the whole chain on the next part.
 - Work in millimetres throughout. Keep the scan, the scripts and an `out/`
   folder together.
 
+## Tools
+
+The `tools/` folder next to this file has working versions of the scripts
+this workflow needs, from a real project. Copy them into the project and
+adapt them.
+
+| Script | Runs in | What it does |
+| --- | --- | --- |
+| `analyze.py` | Blender | Mesh check of a PLY: counts, bounding box, principal axes, non-manifold and boundary edges, islands, volume. |
+| `align.py` | Blender | Keeps the largest island, then aligns the scan (PLY) to a CAD STL: principal axes in all 24 orientations, then trimmed ICP. Writes `scan_aligned.stl` and the per-vertex deviation. |
+| `symfit.py` | Python | Fits the scan's mirror plane and re-frames it so the plane is y = 0 and x = 0 at the min-x end. |
+| `meshtools.py` | Python | `probe` fires ray probes; `slice` plots cuts on a 0.25 mm grid with an optional CAD overlay. Importable: `read_mesh`, `ray_hits`, `slice_segs`. |
+| `wallmap.py` | Python | Height map of the two side walls (outermost \|y\|) on a 0.2 mm grid. |
+| `compare.py` | Blender | The scorer: signed distances both ways, RMS, share within 0.1, 0.2 and 0.3 mm, the worst 1 mm cells, and deviation-coloured renders. |
+| `render_views.py` | Blender | Eight shaded orthographic views of one or two meshes. |
+
+```bash
+blender -b --factory-startup --python tools/analyze.py -- scan.ply
+blender -b --factory-startup --python tools/align.py -- scan.ply guess.stl out
+python tools/symfit.py out/scan_aligned.stl scan_sym.stl
+export SCAN=scan_sym.stl
+python tools/meshtools.py probe "y x=15.5 z=4" "z x=28.7 y=0"
+python tools/meshtools.py slice cuts.png "Y:3.6,Y:5.0" --cad model.stl
+python tools/wallmap.py out/wall
+blender -b --factory-startup --python tools/compare.py -- scan_sym.stl model.stl out/score
+blender -b --factory-startup --python tools/render_views.py -- out/views scan_sym.stl model.stl
+```
+
+- "Python" means any interpreter with numpy, scipy and matplotlib. FreeCAD's
+  bundled `python` has all three.
+- Meshes can be STL or binary little-endian PLY, except that `analyze.py`
+  and `align.py` read the scan as PLY.
+- A probe spec is `"<axis> <k>=<v> <k>=<v>"`: a line along `<axis>` with the
+  other two coordinates fixed. It prints every crossing, sorted.
+- Tuned to a 30 mm part: the camera target (15, 0, 8) and ortho scales in
+  `compare.py` and `render_views.py`, and the 0.4 mm colour range in
+  `compare.py`. Edit them for other parts. In `render_views.py`, the
+  `side_pos`, `leg_end` and `hook_end` views come out rotated.
+- There is no shape-fitting script. Fit circles, lines and planes to probe
+  output directly with least squares.
+- `examples/tine-clip` in the source repo has a cleaned scan and its fitted
+  model in the same frame. Use them to check the tools work before trusting
+  them on a new part.
+
 ## Workflow
 
 ### 1. Measure what you can first
