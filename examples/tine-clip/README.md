@@ -8,7 +8,7 @@ model (v4) to one fitted to a Revopoint MetroX scan (v5).
 | --- | --- |
 | `scan_aligned.ply` | The cleaned scan on its own mirror plane: 44,197 vertices, watertight, in mm. It's in v5's frame: x = 0 at the leg tips, y = 0 on the mirror plane, z up. |
 | `tine_clip.py` | v4, from calipers, photos and guesses. Each parameter is tagged (M), (P) or (G). |
-| `tine_clip_v5.py` | v5, fitted to the scan. About 70 named parameters, each tagged (S) for scan or (M) for calipers. |
+| `tine_clip_v5.py` | v5, fitted to the scan. About 80 named parameters, each tagged (S) for scan or (M) for calipers. |
 | `tile_images.py` | Tiles renders from `render_views.py` and `compare.py` into the post's composite figures. |
 
 ## Build and score
@@ -20,8 +20,8 @@ blender -b --factory-startup --python ../../skills/scan-to-cad/tools/compare.py 
 
 The build writes `tine_clip_v5.FCStd`, `.step` and `.stl` next to the script.
 v5 is one valid solid, 29.58 × 12.14 × 15.99 mm, with a 2.40 mm snap throat.
-Against the scan it scores about 0.12 mm RMS, with 98% of scan points within
-0.3 mm.
+Against the scan it scores 0.120 mm RMS, with 91% of scan points within
+0.2 mm and 98% within 0.3 mm.
 
 The build also writes `tine_clip_v5_print_on_side.stl`, a copy laid on its
 side. The clip in the post was printed differently: in ASA at 100% infill,

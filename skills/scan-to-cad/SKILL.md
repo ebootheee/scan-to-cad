@@ -15,11 +15,12 @@ be able to rerun the whole chain on the next part.
 
 ## Setup
 
-- **FreeCAD 1.1, headless:** `freecadcmd script.py`. It bundles numpy and
-  scipy, so analysis scripts can run inside it too.
-- **Blender, headless:** `blender -b --python script.py -- <args>`, for mesh
-  cleanup, deviation maps and renders.
-- Plain Python with numpy, scipy and trimesh works for analysis.
+- **FreeCAD 1.1, headless:** `freecadcmd script.py`. It bundles numpy, scipy
+  and matplotlib, so analysis scripts can run inside it too.
+- **Blender 5, headless** (tested on 5.0.1 and 5.2.2):
+  `blender -b --factory-startup --python script.py -- <args>`, for mesh
+  cleanup, alignment, deviation maps and renders.
+- Plain Python with numpy, scipy and matplotlib works for analysis.
 - Prefer headless scripts to driving a GUI over MCP. Scripts are repeatable;
   clicks are not.
 - Work in millimetres throughout. Keep the scan, the scripts and an `out/`
@@ -38,7 +39,7 @@ adapt them.
 | `symfit.py` | Python | Fits the scan's mirror plane and re-frames it so the plane is y = 0 and x = 0 at the min-x end. |
 | `meshtools.py` | Python | `probe` fires ray probes; `slice` plots cuts on a 0.25 mm grid with an optional CAD overlay. Importable: `read_mesh`, `ray_hits`, `slice_segs`. |
 | `wallmap.py` | Python | Height map of the two side walls (outermost \|y\|) on a 0.2 mm grid. |
-| `compare.py` | Blender | The scorer: signed distances both ways, RMS, share within 0.1, 0.2 and 0.3 mm, the worst 1 mm cells, and deviation-coloured renders. |
+| `compare.py` | Blender | The scorer: signed distances both ways, RMS, share within 0.1, 0.2 and 0.3 mm, the worst 1 mm cubes, and deviation-coloured renders. |
 | `render_views.py` | Blender | Eight shaded orthographic views of one or two meshes. |
 
 ```bash
@@ -81,23 +82,24 @@ The tags tell you which numbers to distrust later.
 
 ### 2. Check the mesh before trusting it
 
-Report: vertex and face count, watertight or not, open-edge count, loose
-islands, duplicate internal surfaces, and the bounding box against the
-caliper length. Scan quality varies a lot. One clean scan needed only three
-specks deleted; another had 286 loose fragments, about 6,900 open edges and
-duplicate internal surfaces. Delete islands. For many holes, use a
-winding-number reconstruction rather than local hole filling. Treat duplicate
-surfaces as noise.
+Report (`analyze.py` covers most of this): vertex and face count, watertight
+or not, open-edge count, loose islands, duplicate internal surfaces, and the
+bounding box against the caliper length. Scan quality varies a lot. One clean
+scan needed only three specks deleted; another had 286 loose fragments, about
+6,900 open edges and duplicate internal surfaces. Delete islands. For many
+holes, use a winding-number reconstruction rather than local hole filling.
+Treat duplicate surfaces as noise.
 
 ### 3. Align in two passes
 
-1. **Rough:** match the scan's principal axes to your best-guess model (or to
-   a sensible frame) in all 24 axis orientations, refine each with ICP, and
-   keep the best. About 0.3 mm RMS is enough to compare.
-2. **Mirror plane:** if the part is symmetric, reflect the scan onto itself
-   and solve for the plane where left matches right. Put that plane at
-   x = 0 (or y = 0) and report the yaw and roll you corrected. Real scans
-   were 1 to 4 degrees off.
+1. **Rough** (`align.py`): match the scan's principal axes to your
+   best-guess model (or to a sensible frame) in all 24 axis orientations,
+   refine each with ICP, and keep the best. About 0.3 mm RMS is enough to
+   compare.
+2. **Mirror plane** (`symfit.py`): if the part is symmetric, reflect the
+   scan onto itself and solve for the plane where left matches right. Put
+   that plane at y = 0, which `wallmap.py` assumes, and report the yaw and
+   roll you corrected. Real scans were 1° to 4° off.
 
 Do not skip pass 2. Without it, the two halves measure differently and you
 will faithfully model an asymmetry that is only how the part sat on the
@@ -107,15 +109,18 @@ with itself.
 
 ### 4. Measure the mesh
 
-A mesh is triangles, not dimensions. Three tools turn it into numbers; build
-them early and use them constantly.
+A mesh is triangles, not dimensions. Three tools turn it into numbers; use
+them constantly.
 
-- **Slices:** cut with a plane and plot the outline on a 0.25 mm grid with the
-  CAD model overlaid. The fastest way to see what a feature really is.
-- **Ray probes:** fire a line through the mesh and report every crossing.
-  Fire in batches of 100 to 200 and average left against right.
-- **Height maps:** sweep probes over a face on a 0.2 mm grid and colour the
-  result. This finds small ribs, dimples and slits that slices miss.
+- **Slices** (`meshtools.py slice`): cut with a plane and plot the outline
+  on a 0.25 mm grid with the CAD model overlaid. The fastest way to see what
+  a feature really is.
+- **Ray probes** (`meshtools.py probe`): fire a line through the mesh and
+  report every crossing. Fire in batches of 100 to 200 and average left
+  against right.
+- **Height maps** (`wallmap.py`): sweep probes over a face on a 0.2 mm grid
+  and colour the result. This finds small ribs, dimples and slits that
+  slices miss.
 
 ### 5. Fit simple shapes
 
@@ -134,7 +139,7 @@ check: *the scan showed / decision / why*.
 | --- | --- | --- |
 | Fits a simple shape cleanly? | Yes: keep the fitted shape | Wobbles: smoothing |
 | Mirrored on both sides? | Yes | One side only: wear or noise. Point-symmetric only: likely a molding artifact |
-| Affects fit or function? | Snap lips, seats, lead-in chamfers, sizeable rounds | Molding draft (about 2 degrees), hairline rounds: model them square |
+| Affects fit or function? | Snap lips, seats, lead-in chamfers, sizeable rounds | Molding draft (about 2°), hairline rounds: model them square |
 
 ### 7. Write the model as a script
 
@@ -157,8 +162,8 @@ check: *the scan showed / decision / why*.
 
 ### 8. Score every build
 
-After every change, run a scorer and put the results in a table, one row per
-pass:
+After every change, run the scorer (`compare.py`) and put the results in a
+table, one row per pass:
 
 - Distance from every scan point to the CAD surface, and from CAD back to the
   scan (one direction alone hides missing or extra material).
@@ -169,8 +174,8 @@ Also run sanity checks on every build: exactly one solid, `isValid()`, volume,
 and bounding box against the scan's. Then look at slices anyway, because a
 score can hide a bad cut.
 
-What good looked like on a 30 mm clip: 0.12 mm RMS, 91% within 0.2 mm, 98%
-within 0.3 mm, after four passes from 0.14 mm.
+What good looked like on a 30 mm clip: 0.12 mm RMS, 91% within 0.2 mm and
+98% within 0.3 mm after four passes. The first pass scored 0.14 mm.
 
 ### 9. Settle conflicts before printing
 
@@ -184,7 +189,7 @@ in one named parameter.
   like a dishwasher. PLA softens and creeps.
 - Thin walls: 100% infill.
 - Orientation: small snap fits break along layer lines. Tilt the part so no
-  hook or flex panel bends straight across the layers. A 45 degree tilt on
+  hook or flex panel bends straight across the layers. A 45° tilt on
   two axes worked; so does laying a hook flat so its curve stays within
   layers.
 - ASA and ABS can be acetone vapor-smoothed afterwards, which fuses the outer
@@ -195,8 +200,8 @@ in one named parameter.
 ## Gotchas
 
 - **A mirror helper flipped a wall upside down instead of left to right.** The
-  build came out as three solids and 25 mm too tall. A bounding-box check
-  found it in seconds; run one on every build.
+  build came out as three solids, 25 mm tall instead of about 16 mm. A
+  bounding-box check found it in seconds; run one on every build.
 - **A swept rounding profile that was too shallow silently cut the bottoms off
   the legs.** The score barely moved; a side slice made it obvious.
 - **Averaging halves thins features where one half of the scan has holes.**
